@@ -9,6 +9,8 @@ import com.whatsapp.whatsapp_banking.model.Message;
 import com.whatsapp.whatsapp_banking.model.Value;
 import com.whatsapp.whatsapp_banking.model.WebhookPayload;
 //import org.springframework.beans.factory.annotation.Value;
+import com.whatsapp.whatsapp_banking.service.MessagingService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -22,14 +24,8 @@ import java.util.Map;
 @RequestMapping("/webhook")
 public class WhatsAppWebhookController {
 
-    @org.springframework.beans.factory.annotation.Value("${webhook.verify.token}")
-    private String webhookVerifyToken;
-
-    @org.springframework.beans.factory.annotation.Value("${graph.api.token}")
-    private String graphApiToken;
-
-    @org.springframework.beans.factory.annotation.Value("${server.port}")
-    private int port;
+    @Autowired
+    private MessagingService messagingService;
 
 //    @PostMapping
 //    public ResponseEntity<String> handleIncomingMessage(@RequestBody Map<String, Object> payload) {
@@ -87,11 +83,12 @@ public class WhatsAppWebhookController {
                 messageId = message.getId();
 
                 try {
+                    messagingService.processTheMessage(businessPhoneNumberId, from, messageBody, messageId);
                     // Send a reply message
-                    sendReplyMessage(businessPhoneNumberId, from, "Echo: " + messageBody, messageId);
+//                    sendReplyMessage(businessPhoneNumberId, from, "Echo: " + messageBody, messageId);
 
                     // Mark the incoming message as read
-                    markMessageAsRead(businessPhoneNumberId, messageId);
+                    messagingService.markMessageAsRead(businessPhoneNumberId, messageId);
                 } catch (Exception e) {
                     e.printStackTrace();
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing message");
@@ -102,54 +99,12 @@ public class WhatsAppWebhookController {
         return ResponseEntity.ok("Message processed successfully");
     }
 
-
-    private void sendReplyMessage(String businessPhoneNumberId, String to, String replyText, String contextMessageId) {
-        String url = "https://graph.facebook.com/v20.0/" + businessPhoneNumberId + "/messages";
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + graphApiToken);
-        headers.set("Content-Type", "application/json");
-
-        String requestBody = String.format(
-            "{" +
-                "\"messaging_product\": \"whatsapp\"," +
-                "\"to\": \"%s\"," +
-                "\"text\": { \"body\": \"%s\" }," +
-                "\"context\": { \"message_id\": \"%s\" }" +
-            "}",
-            to, replyText, contextMessageId
-        );
-
-        HttpEntity<String> request = new HttpEntity<>(requestBody, headers);
-        RestTemplate restTemplate = new RestTemplate();
-        restTemplate.postForObject(url, request, String.class);
-    }
-
-    private void markMessageAsRead(String businessPhoneNumberId, String messageId) {
-        String url = "https://graph.facebook.com/v18.0/" + businessPhoneNumberId + "/messages";
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + graphApiToken);
-        headers.set("Content-Type", "application/json");
-
-        String requestBody = String.format(
-            "{" +
-                "\"messaging_product\": \"whatsapp\"," +
-                "\"status\": \"read\"," +
-                "\"message_id\": \"%s\"" +
-            "}",
-            messageId
-        );
-
-        HttpEntity<String> request = new HttpEntity<>(requestBody, headers);
-        RestTemplate restTemplate = new RestTemplate();
-        restTemplate.postForObject(url, request, String.class);
-    }
-
     @GetMapping
     public ResponseEntity<String> verifyWebhook(@RequestParam(name = "hub.mode") String mode,
                                                 @RequestParam(name = "hub.verify_token") String token,
                                                 @RequestParam(name = "hub.challenge") String challenge) {
         // Check the mode and token
-        if ("subscribe".equals(mode) && webhookVerifyToken.equals(token)) {
+        if ("subscribe".equals(mode) && messagingService.getWebhookVerifyToken().equals(token)) {
             // Respond with 200 OK and challenge token
             System.out.println("Webhook verified successfully!");
             return ResponseEntity.ok(challenge);
@@ -164,8 +119,11 @@ public class WhatsAppWebhookController {
         return "<pre>Nothing to see here.\nCheckout README.md to start.</pre>";
     }
 
-    @GetMapping("/health")
-    public String health() {
-        return "200 OK";
+    @GetMapping("/test")
+    public String test(@RequestParam(name = "option") String option) {
+//        messagingService.processTheMessage("420781681112710", "919703447700", option, "ABGGFlA5Fpa");
+        messagingService.processTheMessage("430282886826234", "919703447700", option, "ABGGFlA5Fpa");
+        return "Okay";
     }
+
 }
